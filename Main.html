@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Локальный видеохостинг</title>
+    <style>
+        :root {
+            --background: linear-gradient(45deg, #f0f0f0, #ffffff, #f0f0f0);
+            --text-color: #333;
+            --secondary-bg: rgba(255, 255, 255, 0.1);
+            --video-item-bg: rgba(255, 255, 255, 0.2);
+            --shadow-color: rgba(0, 0, 0, 0.2);
+            --header-text-color: #000;
+            --video-player-bg: #000;
+            --footer-text-color: #666;
+        }
+        [data-theme="dark"] {
+            --background: linear-gradient(45deg, #2c2c2c, #3a3a3a, #2c2c2c);
+            --text-color: #ddd;
+            --secondary-bg: rgba(0, 0, 0, 0.3);
+            --video-item-bg: rgba(0, 0, 0, 0.4);
+            --shadow-color: rgba(255, 255, 255, 0.1);
+            --header-text-color: #fff;
+            --video-player-bg: #1a1a1a;
+            --footer-text-color: #aaa;
+        }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: var(--background);
+            background-size: 200% 200%;
+            color: var(--text-color);
+            min-height: 100vh;
+            overflow-x: hidden;
+            animation: gradientFlow 10s ease-in-out infinite;
+            display: flex;
+            flex-direction: column;
+        }
+        #particles-js {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+        .loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease;
+        }
+        .loader.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .loader-spinner {
+            width: 60px;
+            height: 60px;
+            border: 8px solid #00ccff;
+            border-top: 8px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite, glow 1.5s ease-in-out infinite alternate;
+        }
+        .header {
+            background: linear-gradient(45deg, #3C9, #cd6568);
+            animation: gradientShift 5s ease infinite;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 6px 20px var(--shadow-color);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            border-radius: 0 0 20px 20px;
+            background-size: 200% 200%;
+            opacity: 0.95;
+        }
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .header-logo {
+            height: 50px;
+            width: auto;
+            border-radius: 10px;
+            transition: transform 0.3s ease;
+        }
+        .header-logo:hover {
+            transform: scale(1.1);
+        }
+        h1 {
+            margin: 0;
+            color: var(--header-text-color);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            font-size: 2em;
+            text-shadow: 0 0 2px #000;
+        }
+        .theme-switcher {
+            display: flex;
+            gap: 10px;
+        }
+        .theme-button {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 20px;
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s ease, transform 0.3s ease;
+        }
+        .theme-button:hover {
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(1.05);
+        }
+        .theme-button.active {
+            background: #00ccff;
+            transform: scale(1.1);
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+            flex: 1;
+        }
+        .chapters-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .chapter {
+            padding: 15px;
+            background: linear-gradient(45deg, #3C9, #cd6568);
+            border-radius: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease, color 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+            color: #000;
+            animation: gradientShift 5s ease infinite;
+            box-shadow: 0 4px 15px var(--shadow-color);
+        }
+        .chapter:not(.no-hover):hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 8px 20px rgba(255, 0, 0, 0.7), 0 0 30px rgba(0, 204, 255, 0.5);
+        }
+        .chapter:not(.no-hover)::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: 0.5s;
+        }
+        .chapter:not(.no-hover):hover::before {
+            left: 100%;
+        }
+        .chapter.active {
+            background: #cd6568;
+            color: #fff;
+            animation: pulse 1s ease infinite;
+        }
+        .subchapter {
+            margin: 10px 0;
+            padding: 10px;
+            background: linear-gradient(45deg, #3C9, #cd6568);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.3s ease, background 0.3s ease, color 0.3s ease;
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+            color: #000;
+            animation: gradientShift 5s ease infinite;
+            box-shadow: 0 4px 15px var(--shadow-color);
+        }
+        .subchapter:hover {
+            transform: translateX(10px) scale(1.02);
+            box-shadow: 0 5px 15px rgba(0, 204, 255, 0.7);
+        }
+        .subchapter.active {
+            background: #cd6568;
+            color: #fff;
+            animation: pulse 1s ease infinite;
+        }
+        .content-section {
+            position: relative;
+            margin: 20px auto;
+            background: var(--secondary-bg);
+            border-radius: 15px;
+            padding: 15px;
+            box-shadow: 0 4px 15px var(--shadow-color);
+            max-width: 800px;
+            width: 100%;
+        }
+        .video-section {
+            margin: 20px 0;
+            max-width: 800px;
+            width: 100%;
+            animation: fadeIn 0.5s ease;
+        }
+        .video-player {
+            width: 100%;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 204, 255, 0.5);
+            background: var(--video-player-bg);
+        }
+        .video-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+        .video-item {
+            width: 200px;
+            background: var(--video-item-bg);
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            box-shadow: 0 4px 15px var(--shadow-color);
+        }
+        .video-item:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0, 204, 255, 0.7);
+        }
+        .video-item img {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+        }
+        .video-item .video-title {
+            padding: 10px;
+            font-size: 0.9em;
+            color: #fff;
+            text-align: center;
+            background: linear-gradient(45deg, #3C9, #cd6568);
+            animation: gradientShift 5s ease infinite;
+        }
+        .footer {
+            text-align: center;
+            padding: 10px;
+            font-size: 0.8em;
+            color: var(--footer-text-color);
+            opacity: 0.6;
+            margin-top: auto;
+        }
+        @keyframes gradientFlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        @keyframes glow {
+            from { text-shadow: 0 0 10px rgba(0, 204, 255, 0.7); }
+            to { text-shadow: 0 0 20px rgba(0, 204, 255, 1); }
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Загрузочный экран -->
+    <div class="loader" id="loader">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <!-- Частицы -->
+    <div id="particles-js"></div>
+
+    <!-- Корневой элемент для React -->
+    <div id="root"></div>
+
+    <!-- Подключение Particles.js -->
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+    <!-- Подключение React -->
+    <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.22.5/babel.min.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Данные глав и видео
+        const chaptersData = [
+            {
+                id: 'chapter1',
+                title: 'Тема №1 Упр. данными о предприятии, персонале, аттестациями. Библиотека НТД',
+                videos: [
+                    { id: 'video1-1', src: 'videos/video1-1.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+1.1', title: 'Знакомство с ЦСУПБ, интерфейс' },
+                    { id: 'video1-2', src: 'videos/video1-2.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+1.2', title: 'Управление данными о предприятии' },
+                    { id: 'video1-3', src: 'videos/video1-3.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+1.3', title: 'Библиотека НТД' },
+                    { id: 'video1-4', src: 'videos/video1-4.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+1.4', title: 'Ведение справочников' },
+                    { id: 'video1-5', src: 'videos/video1-5.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+1.5', title: 'Управление аттестациями, проверками знаний' },
+                    { id: 'video1-6', src: 'videos/video1-6.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+1.6', title: 'Управление данными о персонале' },
+                ],
+            },
+            {
+                id: 'chapter2',
+                title: 'Тема №2 Упр. данными об ОПО, ТУ, ЗИС, ЭО',
+                videos: [
+                    { id: 'video2-1', src: 'videos/video2-1.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+2.1', title: 'Аналитика, контроль состояния объектов' },
+                ],
+                subchapters: [
+                    {
+                        id: 'subchapter2-1',
+                        title: 'Управление данными об ОПО',
+                        videos: [
+                            { id: 'video2-1-1', src: 'videos/video2-1-1.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+2.1.1', title: 'Управление данными об ОПО' },
+                            { id: 'video2-1-2', src: 'videos/video2-1-2.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+2.1.2', title: 'Внесение данных об ОПО' },
+                            { id: 'video2-1-3', src: 'videos/video2-1-3.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+2.1.3', title: 'Внесение документов ОПО' },
+                        ],
+                    },
+                    {
+                        id: 'subchapter2-2',
+                        title: 'Ввод данных ТУ, ЗиС, ЭО',
+                        videos: [
+                            { id: 'video2-2-1', src: 'videos/video2-2-1.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+2.2.1', title: 'Ввод данных ТУ, ЗиС' },
+                            { id: 'video2-2-2', src: 'videos/video2-2-2.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+2.2.2', title: 'Ввод данных ЭО' },
+                            { id: 'video2-2-3', src: 'videos/video2-2-3.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+2.2.3', title: 'Заполнение справочника Виды ЭО и др' },
+                        ],
+                    },
+                    {
+                        id: 'subchapter2-3',
+                        title: 'Планирование диагност.работ',
+                        videos: [
+                            { id: 'video2-3-1', src: 'videos/video2-3-1.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+2.3.1', title: 'Введение' },
+                            { id: 'video2-3-2', src: 'videos/video2-3-2.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+2.3.2', title: 'Создание шаблонов работ' },
+                            { id: 'video2-3-3', src: 'videos/video2-3-3.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+2.3.3', title: 'Создание работ' },
+                            { id: 'video2-3-4', src: 'videos/video2-3-4.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+2.3.4', title: 'Ведение работ в системе' },
+                        ],
+                    },
+                ],
+            },
+            {
+                id: 'chapter3',
+                title: 'Тема №3 Проверки надз.органов. Внутренние проверки',
+                videos: [
+                    { id: 'video3-1', src: 'videos/video3-1.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+3.1', title: 'Проверки надз.органов' },
+                    { id: 'video3-2', src: 'videos/video3-2.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+3.2', title: 'Внутренние проверки (ВП)' },
+                    { id: 'video3-3', src: 'videos/video3-3.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+3.3', title: 'Использование чек-листов в ВП' },
+                    { id: 'video3-4', src: 'videos/video3-4.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+3.4', title: 'Контроль и аналитика' },
+                ],
+            },
+            {
+                id: 'chapter4',
+                title: 'Ну тут хз',
+                subchapters: [
+                    {
+                        id: 'subchapter4-1',
+                        title: 'я хз чё',
+                        videos: [
+                            { id: 'video4-1', src: 'videos/video4-1.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+4.1', title: 'я хз' },
+                        ],
+                    },
+                    {
+                        id: 'subchapter4-2',
+                        title: 'я хз',
+                        videos: [
+                            { id: 'video4-2', src: 'videos/video4-2.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+4.2', title: 'я хз' },
+                        ],
+                    },
+                ],
+            },
+            {
+                id: 'chapter5',
+                title: 'Тема №5 Упр. данными о происшествиях. Формир-е отчетности в ЦСУПБ',
+                videos: [
+                    { id: 'video5-1', src: 'videos/video5-1.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+5.1', title: 'Общие сведения о разделе Происшествия' },
+                    { id: 'video5-2', src: 'videos/video5-2.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+5.2', title: 'Ввод данных об авариях и др. происшествиях' },
+                    { id: 'video5-3', src: 'videos/video5-3.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+5.3', title: 'Формирование сведений об ОПО' },
+                ],
+                subchapters: [
+                    {
+                        id: 'subchapter5-1',
+                        title: 'Формирование сведений о ПК',
+                        videos: [
+                            { id: 'video5-1-1', src: 'videos/video5-1-1.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+5.1.1', title: 'Часть1_Формирование сведений о ПК' },
+                            { id: 'video5-1-2', src: 'videos/video5-1-2.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+5.1.2', title: 'Часть2_Формирование сведений о ПК' },
+                        ],
+                    },
+                ],
+            },
+            {
+                id: 'chapter6',
+                title: 'Тема №6 Выполнение планов, мероприятий в ЦСУПБ',
+                videos: [
+                    { id: 'video6-1', src: 'videos/video6-1.mp4', thumbnail: 'https://via.placeholder.com/200x120.png?text=Video+6.1', title: 'Управление выполнением планов, мероприятий' },
+                ],
+            },
+        ];
+
+        // Компонент видео
+        const VideoSection = ({ id, videos, isVisible }) => {
+            const [currentVideo, setCurrentVideo] = useState(videos[0]?.src);
+
+            const playVideo = (src) => {
+                setCurrentVideo(src);
+            };
+
+            if (!isVisible) return null;
+
+            return (
+                <div id={id} className="video-section">
+                    <video className="video-player" controls src={currentVideo}>
+                        Ваш браузер не поддерживает видео.
+                    </video>
+                    <div className="video-list">
+                        {videos.map(video => (
+                            <div key={video.id} className="video-item" onClick={() => playVideo(video.src)}>
+                                <img src={video.thumbnail} alt="Thumbnail" />
+                                <div className="video-title">{video.title}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        // Основной компонент приложения
+        const App = () => {
+            const [isLoading, setIsLoading] = useState(true);
+            const [activeChapter, setActiveChapter] = useState(null);
+            const [activeSubchapter, setActiveSubchapter] = useState(null);
+            const [theme, setTheme] = useState('light');
+
+            useEffect(() => {
+                // Инициализация частиц
+                particlesJS('particles-js', {
+                    particles: {
+                        number: { value: 80, density: { enable: true, value_area: 800 } },
+                        color: { value: '#00ccff' },
+                        shape: { type: 'circle' },
+                        opacity: { value: 0.5, random: true },
+                        size: { value: 3, random: true },
+                        line_linked: { enable: true, distance: 150, color: '#00ccff', opacity: 0.4, width: 1 },
+                        move: { enable: true, speed: 2, direction: 'none', random: false, straight: false, out_mode: 'out' },
+                    },
+                    interactivity: {
+                        detect_on: 'canvas',
+                        events: { onhover: { enable: true, mode: 'repulse' }, onclick: { enable: true, mode: 'push' }, resize: true },
+                        modes: { repulse: { distance: 100, duration: 0.4 }, push: { particles_nb: 4 } },
+                    },
+                    retina_detect: true,
+                });
+
+                // Имитация загрузки
+                setTimeout(() => {
+                    setIsLoading(false);
+                    document.getElementById('loader').classList.add('hidden');
+                }, 2000);
+            }, []);
+
+            const toggleChapter = (chapterId) => {
+                if (activeChapter === chapterId) {
+                    setActiveChapter(null);
+                    setActiveSubchapter(null);
+                } else {
+                    setActiveChapter(chapterId);
+                    setActiveSubchapter(null);
+                }
+            };
+
+            const toggleSubchapter = (subchapterId) => {
+                setActiveSubchapter(activeSubchapter === subchapterId ? null : subchapterId);
+            };
+
+            const switchTheme = (selectedTheme) => {
+                setTheme(selectedTheme);
+                document.documentElement.setAttribute('data-theme', selectedTheme);
+            };
+
+            return (
+                <div>
+                    <div className="header">
+                        <div className="header-content">
+                            <img src="https://via.placeholder.com/100x50.png?text=Logo" alt="Бийский Олеумный Завод" className="header-logo" />
+                            <h1>Локальный видеохостинг</h1>
+                        </div>
+                        <div className="theme-switcher">
+                            <button
+                                className={`theme-button ${theme === 'light' ? 'active' : ''}`}
+                                onClick={() => switchTheme('light')}
+                            >
+                                Светлая
+                            </button>
+                            <button
+                                className={`theme-button ${theme === 'dark' ? 'active' : ''}`}
+                                onClick={() => switchTheme('dark')}
+                            >
+                                Темная
+                            </button>
+                        </div>
+                    </div>
+                    <div className="container">
+                        <div className="chapters-grid">
+                            {chaptersData.map(chapter => (
+                                <div
+                                    key={chapter.id}
+                                    className={`chapter ${activeChapter === chapter.id ? 'active' : ''}`}
+                                    onClick={() => toggleChapter(chapter.id)}
+                                >
+                                    {chapter.title}
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="content-section">
+                            {activeChapter && chaptersData
+                                .filter(chapter => chapter.id === activeChapter)
+                                .map(chapter => (
+                                    <div key={chapter.id}>
+                                        {chapter.videos && (
+                                            <VideoSection
+                                                id={`${chapter.id}-videos`}
+                                                videos={chapter.videos}
+                                                isVisible={true}
+                                            />
+                                        )}
+                                        {chapter.subchapters && chapter.subchapters.map(subchapter => (
+                                            <div key={subchapter.id}>
+                                                <div
+                                                    className={`subchapter ${activeSubchapter === subchapter.id ? 'active' : ''}`}
+                                                    onClick={() => toggleSubchapter(subchapter.id)}
+                                                >
+                                                    {subchapter.title}
+                                                </div>
+                                                <VideoSection
+                                                    id={subchapter.id}
+                                                    videos={subchapter.videos}
+                                                    isVisible={activeSubchapter === subchapter.id}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                ))}
+                        </div>
+                    </div>
+                    <div className="footer">
+                        
+                    </div>
+                </div>
+            );
+        };
+
+        // Рендеринг приложения
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
